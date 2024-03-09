@@ -148,6 +148,19 @@ async function run() {
             res.send(result);
         })
 
+        app.get('/products-by-name', async (req, res) => {
+            const brand_name = req.query.name;
+            console.log(brand_name);
+            const result = await products.find({ brand_name }).toArray();
+            res.send(result);
+        })
+
+        app.get('/cart-products', async (req, res) => {
+            const email = req.query.email;
+            console.log(email);
+            const result = await cartItem.find({ email }).toArray();
+            res.send(result);
+        })
 
     } finally {
         // Ensures that the client will close when you finish/error
