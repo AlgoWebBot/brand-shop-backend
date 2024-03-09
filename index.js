@@ -1,14 +1,17 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+require('dotenv').config()
+const stripe = require('stripe')(process.env.SECRET_KEYS_API_SK)
 const multer = require("multer");
 const UPLOAD_FOLDER = "./public/image";
 const fs = require("fs");
 const path = require("path");
 app.use(express.static('public'));
-require('dotenv').config()
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+console.log(process.env.SECRET_KEYS_API_SK);
 // cors state for cross origin request service. its create relationship between backend and fontend 
 app.use(cors());
 app.use(express.json());
@@ -56,6 +59,7 @@ async function run() {
         const products = database.collection("products");
         const cartItem = database.collection("cartItem");
         const categories = database.collection("categories");
+        const payment = database.collection("payment");
 
 
         app.get('/products', async (req, res) => {
@@ -147,8 +151,32 @@ async function run() {
             const result = await categories.find().toArray();
             res.send(result);
         })
+        // Payment Intent
+       app.post("/payment-intent", async (req, res) => {
+        const { price } = req.body;
+        console.log(price);
+        const amount = parseInt(price * 100);
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        res.send({ clientSecret: paymentIntent.client_secret });
+      });
+    
+        // Payment post
+        app.post('/payments', async (req, res) => {
+            const paymentInfo = req.body; // Use a different variable name here
+            console.log(paymentInfo);
 
-
+            try {
+                const paymentResult = await payment.insertOne(paymentInfo);
+                res.json(paymentResult);
+            } catch (error) {
+                console.error("Error inserting payment:", error);
+                res.status(500).json({ error: "Internal Server Error" });
+            }
+        });
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
@@ -160,6 +188,6 @@ app.get('/', (req, res) => {
     res.send('Product management server is running')
 })
 
-app.listen(5000, () => {
-    console.log('Server running at port 5000');
+app.listen(8000, () => {
+    console.log('Server running at port 8000');
 })
