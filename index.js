@@ -1,6 +1,11 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const multer = require("multer");
+const UPLOAD_FOLDER = "./public/image";
+const fs = require("fs");
+const path = require("path");
+app.use(express.static('public'));
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
@@ -22,12 +27,35 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
-        // await client.connect();
+        const storage = multer.diskStorage({
+            destination: (req, file, cb) => {
+                cb(null, UPLOAD_FOLDER);
+            },
+            filename: (req, file, cb) => {
+                if (file) {
+                    const fileExt = path.extname(file.originalname);
+                    const fileName =
+                        file.originalname
+                            .replace(fileExt, "")
+                            .toLowerCase()
+                            .split(" ")
+                            .join("-") +
+                        "-" +
+                        Date.now();
+                    console.log("🚀 ~ fileName:", fileName);
+                    cb(null, fileName + fileExt);
+                }
+            },
+        });
+
+        var upload = multer({
+            storage: storage,
+        });
 
         const database = client.db("productsDB");
         const products = database.collection("products");
         const cartItem = database.collection("cartItem");
+        const categories = database.collection("categories");
 
 
         app.get('/products', async (req, res) => {
@@ -42,7 +70,7 @@ async function run() {
 
         app.get('/brand/:id', async (req, res) => {
             const id = req.params.id;
-            const query = { brand_name : id.toLocaleLowerCase() };
+            const query = { brand_name: id.toLocaleLowerCase() };
             const searchProducts = await products.find(query).toArray();
             res.send(searchProducts)
         })
@@ -102,9 +130,25 @@ async function run() {
             res.send(result);
         })
 
-        // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
+        // ! -------------newly added-----------
+        app.post('/add-cat', upload.single('image'), async (req, res) => {
+            const { name } = req.body;
+            const available = await categories.findOne({ name })
+            if (available) {
+                return res.send({ message: 'Category already available' });
+            }
+            const image = req.file.filename;
+            const result = await categories.insertOne({ name, image });
+            res.send(result);
+        })
+
+        app.get('/categories', async (req, res) => {
+            const result = await categories.find().toArray();
+            res.send(result);
+        })
+
+
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
