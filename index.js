@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 require('dotenv').config()
-const stripe = require('stripe')(process.env.SECRET_KEYS_API_SK)
+const stripe = require('stripe')('sk_test_51OF1GOHUw9AEQwQEvRlzEAUHSGAOeBfwquYTk5W0Z2N0syCZ31WYnu3BeB0StuCuiBP5WBdIh4lqAWbPQZSmcgv4009tnwiwQR')
 const multer = require("multer");
 const UPLOAD_FOLDER = "./public/image";
 const fs = require("fs");
@@ -60,6 +60,8 @@ async function run() {
         const cartItem = database.collection("cartItem");
         const categories = database.collection("categories");
         const payment = database.collection("payment");
+        const messages = database.collection("message");
+        const users = database.collection("users");
 
 
         app.get('/products', async (req, res) => {
@@ -69,6 +71,16 @@ async function run() {
 
         app.get('/carts', async (req, res) => {
             const allCartItem = await cartItem.find().toArray();
+            res.send(allCartItem)
+        })
+
+        app.get('/message', async (req, res) => {
+            const allCartItem = await messages.find().toArray();
+            res.send(allCartItem)
+        })
+
+        app.get('/users', async (req, res) => {
+            const allCartItem = await users.find().toArray();
             res.send(allCartItem)
         })
 
@@ -108,6 +120,8 @@ async function run() {
                     price: body.price,
                     rating: body.rating,
                     category: body.category,
+                    description: body.description,
+                    email: body.email,
                 },
             };
             const result = await products.updateOne(filter, updateProduct, options);
@@ -120,6 +134,24 @@ async function run() {
             const result = await products.insertOne(product);
             res.send(result);
         })
+
+        app.post('/user', async (req, res) => {
+            const product = req.body
+            const email = product?.email;
+            const available = await users.findOne({ email });
+            if (available) {
+                return res.send('Already available');
+            }
+            const result = await users.insertOne(product);
+            res.send(result);
+        })
+
+        app.post('/message', async (req, res) => {
+            const message = req.body
+            const result = await messages.insertOne(message);
+            res.send(result);
+        })
+
         app.post('/carts', async (req, res) => {
             const product = req.body
             console.log(product)
@@ -134,6 +166,20 @@ async function run() {
             res.send(result);
         })
 
+        app.delete('/category/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await categories.deleteOne(query);
+            res.send(result);
+        })
+
+        app.delete('/products/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const query = { _id: new ObjectId(id) };
+            const result = await products.deleteOne(query);
+            res.send(result);
+        })
 
         // ! -------------newly added-----------
         app.post('/add-cat', upload.single('image'), async (req, res) => {
@@ -151,24 +197,49 @@ async function run() {
             const result = await categories.find().toArray();
             res.send(result);
         })
+
+        app.get('/cart-products', async (req, res) => {
+            const email = req.query.email;
+            console.log(email);
+            const result = await cartItem.find({ email }).toArray();
+            res.send(result);
+        })
+
+
+        app.get('/payment-info', async (req, res) => {
+            const email = req.query.email;
+            console.log(email);
+            const result = await payment.find({ requestEmail: email }).toArray();
+            res.send(result);
+        })
+
+        app.get('/products-by-name', async (req, res) => {
+            const brand_name = req.query.name.toLowerCase();
+            const result = await products.find({ brand_name }).toArray();
+            res.send(result);
+        })
+
+
         // Payment Intent
-       app.post("/payment-intent", async (req, res) => {
-        const { price } = req.body;
-        console.log(price);
-        const amount = parseInt(price * 100);
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amount,
-          currency: "usd",
-          payment_method_types: ["card"],
+        app.post("/payment-intent", async (req, res) => {
+            console.log('hit');
+            const { price } = req.body;
+            console.log(price);
+            const amount = parseInt(price * 100);
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ["card"],
+            });
+            res.send({ clientSecret: paymentIntent.client_secret });
         });
-        res.send({ clientSecret: paymentIntent.client_secret });
-      });
-    
+
         // Payment post
         app.post('/payments', async (req, res) => {
-            const paymentInfo = req.body; // Use a different variable name here
+            const paymentInfo = req.body;
+            const _id = paymentInfo.oldId;
+            const del = await cartItem.deleteOne({ _id });
             console.log(paymentInfo);
-
             try {
                 const paymentResult = await payment.insertOne(paymentInfo);
                 res.json(paymentResult);
@@ -188,6 +259,6 @@ app.get('/', (req, res) => {
     res.send('Product management server is running')
 })
 
-app.listen(8000, () => {
-    console.log('Server running at port 8000');
+app.listen(5000, () => {
+    console.log('Server running at port 5000');
 })
